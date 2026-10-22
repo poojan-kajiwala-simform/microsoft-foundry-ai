@@ -1,0 +1,16 @@
+@host = http://localhost:5230
+
+GET {{host}}/health
+
+###
+# Sync the Documents folder (idempotent)
+POST {{host}}/ingest
+
+###
+GET {{host}}/documents
+
+###
+POST {{host}}/ask
+Content-Type: application/json
+
+{ "query": "What is the refund policy?" }

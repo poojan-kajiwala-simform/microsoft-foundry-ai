@@ -1,0 +1,11 @@
+bin/
+obj/
+*.db
+*.db-shm
+*.db-wal
+
+# Local runtime data
+data/
+**/data/
+# Superseded v1 code, safe to delete
+old/

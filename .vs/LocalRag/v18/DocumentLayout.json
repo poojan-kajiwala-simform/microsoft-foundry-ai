@@ -1,0 +1,159 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\LearningProject\\microsoft-foundry-ai\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{6D00F1C2-A335-44AD-9A3E-B6578F3F782C}|src\\LocalRagAssistant\\LocalRagAssistant.csproj|c:\\learningproject\\microsoft-foundry-ai\\src\\localragassistant\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{6D00F1C2-A335-44AD-9A3E-B6578F3F782C}|src\\LocalRagAssistant\\LocalRagAssistant.csproj|solutionrelative:src\\localragassistant\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A547F6D1-9CC7-4CD0-AE21-E45FA61BB647}|eval\\LocalRag.Eval\\LocalRag.Eval.csproj|c:\\learningproject\\microsoft-foundry-ai\\eval\\localrag.eval\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A547F6D1-9CC7-4CD0-AE21-E45FA61BB647}|eval\\LocalRag.Eval\\LocalRag.Eval.csproj|solutionrelative:eval\\localrag.eval\\program.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6D00F1C2-A335-44AD-9A3E-B6578F3F782C}|src\\LocalRagAssistant\\LocalRagAssistant.csproj|c:\\learningproject\\microsoft-foundry-ai\\src\\localragassistant\\wwwroot\\index.html||{40D31677-CBC0-4297-A9EF-89D907823A98}",
+      "RelativeMoniker": "D:0:0:{6D00F1C2-A335-44AD-9A3E-B6578F3F782C}|src\\LocalRagAssistant\\LocalRagAssistant.csproj|solutionrelative:src\\localragassistant\\wwwroot\\index.html||{40D31677-CBC0-4297-A9EF-89D907823A98}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A547F6D1-9CC7-4CD0-AE21-E45FA61BB647}|eval\\LocalRag.Eval\\LocalRag.Eval.csproj|c:\\learningproject\\microsoft-foundry-ai\\eval\\localrag.eval\\support.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A547F6D1-9CC7-4CD0-AE21-E45FA61BB647}|eval\\LocalRag.Eval\\LocalRag.Eval.csproj|solutionrelative:eval\\localrag.eval\\support.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 17,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:129:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:132:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:130:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{34e76e81-ee4a-11d0-ae2e-00a0c90fffc3}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:137:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:135:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:131:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{13b12e3e-c1b4-4539-9371-4fe9a0d523fc}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:135:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:136:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:139:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:133:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:138:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Bookmark",
+              "Name": "ST:140:0:{116d2292-e37d-41cd-a077-ebacac4c8cc4}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "index.html",
+              "DocumentMoniker": "C:\\LearningProject\\microsoft-foundry-ai\\src\\LocalRagAssistant\\wwwroot\\index.html",
+              "RelativeDocumentMoniker": "src\\LocalRagAssistant\\wwwroot\\index.html",
+              "ToolTip": "C:\\LearningProject\\microsoft-foundry-ai\\src\\LocalRagAssistant\\wwwroot\\index.html",
+              "RelativeToolTip": "src\\LocalRagAssistant\\wwwroot\\index.html",
+              "ViewState": "AgIAAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001512|",
+              "WhenOpened": "2026-10-13T08:22:18.783Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\LearningProject\\microsoft-foundry-ai\\src\\LocalRagAssistant\\Program.cs",
+              "RelativeDocumentMoniker": "src\\LocalRagAssistant\\Program.cs",
+              "ToolTip": "C:\\LearningProject\\microsoft-foundry-ai\\src\\LocalRagAssistant\\Program.cs",
+              "RelativeToolTip": "src\\LocalRagAssistant\\Program.cs",
+              "ViewState": "AgIAAF0AAAAAAAAAAAAAwAgAAAAXAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-13T08:21:29.616Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Program.cs",
+              "DocumentMoniker": "C:\\LearningProject\\microsoft-foundry-ai\\eval\\LocalRag.Eval\\Program.cs",
+              "RelativeDocumentMoniker": "eval\\LocalRag.Eval\\Program.cs",
+              "ToolTip": "C:\\LearningProject\\microsoft-foundry-ai\\eval\\LocalRag.Eval\\Program.cs",
+              "RelativeToolTip": "eval\\LocalRag.Eval\\Program.cs",
+              "ViewState": "AgIAADcAAAAAAAAAAAAwwFUAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-13T08:13:57.464Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "Support.cs",
+              "DocumentMoniker": "C:\\LearningProject\\microsoft-foundry-ai\\eval\\LocalRag.Eval\\Support.cs",
+              "RelativeDocumentMoniker": "eval\\LocalRag.Eval\\Support.cs",
+              "ToolTip": "C:\\LearningProject\\microsoft-foundry-ai\\eval\\LocalRag.Eval\\Support.cs",
+              "RelativeToolTip": "eval\\LocalRag.Eval\\Support.cs",
+              "ViewState": "AgIAABYAAAAAAAAAAAAQwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-10-13T08:13:47.698Z"
+            }
+          ]
+        },
+        {
+          "DockedWidth": 434,
+          "SelectedChildIndex": -1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:0:0:{0174dea2-fdbe-4ef1-8f99-c0beae78880f}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

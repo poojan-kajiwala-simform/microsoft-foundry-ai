@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Local RAG Assistant</title>
+<style>
+  :root { --bg:#fafafa; --fg:#1b1b1f; --muted:#6b6b76; --card:#fff; --line:#e3e3e8; --accent:#2f5bea; --ok:#1a7f4b; --warn:#a15c00; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16161a; --fg:#ececf1; --muted:#9a9aa6; --card:#1f1f25; --line:#32323b; --accent:#7b9bff; --ok:#4cc38a; --warn:#e0a040; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.5 system-ui, sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:16px; }
+  h1 { font-size:20px; margin:8px 0 4px; }
+  .status { color:var(--muted); font-size:13px; margin-bottom:12px; }
+  .row { display:flex; gap:8px; }
+  input[type=text] { flex:1; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); font:inherit; }
+  button { padding:10px 14px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--fg); cursor:pointer; font:inherit; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; margin-top:14px; }
+  #answer { white-space:pre-wrap; min-height:1.5em; }
+  .abstain { color:var(--warn); }
+  .src { font-size:13px; padding:6px 0; border-top:1px solid var(--line); }
+  .src:first-child { border-top:0; }
+  .src.cited b { color:var(--ok); }
+  .meta { color:var(--muted); font-size:12px; margin-top:8px; }
+  details { margin-top:14px; } summary { cursor:pointer; color:var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Local RAG Assistant</h1>
+  <div class="status" id="status">Checking models…</div>
+  <form class="row" id="form">
+    <input type="text" id="q" placeholder="Ask about your documents…" autocomplete="off" autofocus>
+    <button class="primary" id="ask" type="submit">Ask</button>
+    <button id="stop" type="button" hidden>Stop</button>
+  </form>
+  <div class="card" id="result" hidden>
+    <div id="answer"></div>
+    <div id="sources"></div>
+    <div class="meta" id="timings"></div>
+  </div>
+  <details>
+    <summary>Documents</summary>
+    <div class="card"><div class="row"><input type="file" id="files" multiple accept=".pdf,.docx,.txt,.md"><button id="ingest">Upload &amp; sync</button></div>
+    <div id="docs" class="meta"></div></div>
+  </details>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let controller = null;
+
+async function refreshStatus() {
+  try {
+    const h = await (await fetch('/health')).json();
+    const m = x => `${x.alias}: ${x.state}${x.state === 'Downloading' && x.downloadPercent != null ? ' ' + Math.round(x.downloadPercent) + '%' : ''}`;
+    $('status').textContent = `${m(h.embedding)} · ${m(h.chat)} · ${h.indexedChunks} chunks indexed`;
+    const docs = await (await fetch('/documents')).json();
+    $('docs').textContent = docs.length ? docs.map(d => `${d.source} (${d.chunkCount} chunks)`).join(' · ') : 'No documents indexed yet.';
+  } catch { $('status').textContent = 'Server unreachable.'; }
+}
+refreshStatus(); setInterval(refreshStatus, 3000);
+
+$('ingest').onclick = async () => {
+  const fd = new FormData();
+  for (const f of $('files').files) fd.append('files', f);
+  $('docs').textContent = 'Indexing…';
+  const r = await fetch('/ingest', { method: 'POST', body: fd });
+  const j = await r.json();
+  $('docs').textContent = r.ok
+    ? `Added ${j.added}, updated ${j.updated}, unchanged ${j.unchanged}, removed ${j.removed}.` + (j.failures.length ? ' Failed: ' + j.failures.map(f => `${f.source} (${f.reason})`).join('; ') : '')
+    : (j.detail || j.error || 'Ingestion failed');
+  setTimeout(refreshStatus, 4000);
+};
+
+$('stop').onclick = () => controller?.abort();
+
+$('form').onsubmit = async e => {
+  e.preventDefault();
+  const query = $('q').value.trim(); if (!query) return;
+  controller = new AbortController();
+  $('result').hidden = false; $('answer').textContent = ''; $('answer').className = ''; $('sources').innerHTML = ''; $('timings').textContent = '';
+  $('ask').hidden = true; $('stop').hidden = false;
+  try {
+    const r = await fetch('/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query }), signal: controller.signal });
+    if (!r.ok) { const p = await r.json().catch(() => ({})); $('answer').textContent = p.detail || p.error || `Error ${r.status}`; return; }
+    $('answer').textContent = (await r.json()).answer;
+  } catch (err) { if (err.name !== 'AbortError') $('answer').textContent += '\n[error] ' + err.message; else $('answer').textContent += ' …(stopped)'; }
+  finally { $('ask').hidden = false; $('stop').hidden = true; }
+};
+
+</script>
+</body>
+</html>

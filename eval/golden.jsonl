@@ -1,0 +1,16 @@
+{"id":"q01","question":"How much is the daily meal per diem for overnight assignments?","answerable":true,"expectedSource":"expenses.md","evidence":"$75 per day","answerKeywords":["75"]}
+{"id":"q02","question":"What is the hotel cap per night in London?","answerable":true,"expectedSource":"expenses.md","evidence":"$260 per night","answerKeywords":["260"]}
+{"id":"q03","question":"By when must I submit my expense report after a trip?","answerable":true,"expectedSource":"expenses.md","evidence":"within 30 days","answerKeywords":["30"]}
+{"id":"q04","question":"Do I need a receipt for a $40 purchase?","answerable":true,"expectedSource":"expenses.md","evidence":"over $25 must be attached","answerKeywords":["25","receipt","yes"]}
+{"id":"q05","question":"How fast must the on-call engineer acknowledge a Severity 1 incident?","answerable":true,"expectedSource":"incident-response.md","evidence":"acknowledge within 15 minutes","answerKeywords":["15"]}
+{"id":"q06","question":"What does error code PX-4471 mean?","answerable":true,"expectedSource":"incident-response.md","evidence":"PX-4471 means the pump controller has lost its calibration","answerKeywords":["calibration"]}
+{"id":"q07","question":"When does the on-call rotation change over?","answerable":true,"expectedSource":"incident-response.md","evidence":"every Monday at 09:00","answerKeywords":["monday"]}
+{"id":"q08","question":"How soon is a postmortem due after a Sev 1 incident?","answerable":true,"expectedSource":"incident-response.md","evidence":"within 5 business days","answerKeywords":["5","five"]}
+{"id":"q09","question":"How often do lone workers have to check in with dispatch?","answerable":true,"expectedSource":"field-safety.md","evidence":"every 2 hours","answerKeywords":["2 hours","two hours","every 2"]}
+{"id":"q10","question":"What is the work and rest cycle when it is hotter than 35 degrees?","answerable":true,"expectedSource":"field-safety.md","evidence":"45 minutes of work followed by 15 minutes of rest","answerKeywords":["45","15"]}
+{"id":"q11","question":"Where must lithium battery packs be stored?","answerable":true,"expectedSource":"field-safety.md","evidence":"fireproof cabinet","answerKeywords":["fireproof","cabinet"]}
+{"id":"q12","question":"Who is allowed to remove my lockout lock?","answerable":true,"expectedSource":"field-safety.md","evidence":"Only the person who applied a lock may remove it","answerKeywords":["only","person who applied","you"]}
+{"id":"u01","question":"What is the company's policy on parental leave?","answerable":false}
+{"id":"u02","question":"How do I configure the VPN client on macOS?","answerable":false}
+{"id":"u03","question":"What was Contoso's revenue last year?","answerable":false}
+{"id":"u04","question":"Who won the 2018 football world cup?","answerable":false}
