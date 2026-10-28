@@ -39,10 +39,19 @@ public sealed class RagOptions
     /// </summary>
     public double MinSimilarity { get; set; } = 0.40;
 
+    /// <summary>
+    /// Optional second way through the confidence gate: a BM25 score at or above this also counts as confident, so exact
+    /// keyword queries are not refused when embeddings score them low. 0 (default) disables it; BM25 scores are
+    /// corpus-dependent, so calibrate with the Eval project before enabling.
+    /// </summary>
+    public double MinKeywordScore { get; set; }
+
     // ---- Generation ----
     /// <summary>Token budget for retrieved context (estimated at ~4 chars/token). Keep well under the model's context window.</summary>
     public int MaxContextTokens { get; set; } = 1500;
     public int MaxAnswerTokens { get; set; } = 400;
+    /// <summary>Total sequence length (prompt + answer) the chat model allocates its KV cache for. Must exceed context + answer budgets; lower it if model loading runs out of memory.</summary>
+    public int MaxSequenceLength { get; set; } = 2048;
     public float Temperature { get; set; } = 0.1f;
 
     // ---- Ingestion / storage ----

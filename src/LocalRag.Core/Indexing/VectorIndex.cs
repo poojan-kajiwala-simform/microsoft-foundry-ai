@@ -71,15 +71,20 @@ public sealed class VectorIndex
         var collection = _collection ?? throw new InvalidOperationException("Index not initialised.");
         var records = chunks.ToList();
 
-        await RemoveDocumentAsync(source, ct);
+        // Upsert the new chunks first, then drop the stale ones, so a concurrent query always sees a complete version of the document.
         foreach (var record in records) await collection.UpsertAsync(record, ct);
 
+        List<string> stale;
         lock (_gate)
         {
+            var newIds = records.Select(r => r.Id).ToHashSet();
+            stale = _idsBySource.TryGetValue(source, out var old) ? old.Where(id => !newIds.Contains(id)).ToList() : [];
+            foreach (var id in stale) _byId.Remove(id);
             _idsBySource[source] = records.Select(r => r.Id).ToList();
             foreach (var record in records) _byId[record.Id] = record;
             _bm25Dirty = true;
         }
+        foreach (var id in stale) await collection.DeleteAsync(id, ct);
     }
 
     public async Task RemoveDocumentAsync(string source, CancellationToken ct = default)
@@ -103,7 +108,7 @@ public sealed class VectorIndex
 
         var options = new VectorSearchOptions<ChunkRecord>();
         if (!string.IsNullOrEmpty(sourcePrefix))
-            options.Filter = r => r.Source.StartsWith(sourcePrefix);
+            options.Filter = r => r.Source.StartsWith(sourcePrefix, StringComparison.Ordinal);
 
         var hits = new List<VectorHit>();
         await foreach (var result in collection.SearchAsync(new ReadOnlyMemory<float>(query), top, options, ct))

@@ -44,9 +44,12 @@ public sealed class Retriever(
         for (var i = 0; i < vectorHits.Count; i++)
             fused[vectorHits[i].Chunk.Id] = (vectorHits[i].Chunk, 1.0 / (RrfK + i + 1), i + 1, null);
 
+        var keywordConfident = false;
         if (_options.HybridSearch)
         {
             var keywordHits = index.KeywordSearch(query, _options.CandidateCount, sourcePrefix);
+            // An exact keyword match (error code, SKU, name) that embeddings "blur" can still pass the gate.
+            keywordConfident = _options.MinKeywordScore > 0 && keywordHits.Count > 0 && keywordHits[0].Score >= _options.MinKeywordScore;
             for (var i = 0; i < keywordHits.Count; i++)
             {
                 var (chunk, _) = keywordHits[i];
@@ -66,6 +69,6 @@ public sealed class Retriever(
                 e.Score, e.VRank, e.KRank))
             .ToList();
 
-        return new RetrievalResult(ranked, topSimilarity, topSimilarity >= _options.MinSimilarity, IndexEmpty: false);
+        return new RetrievalResult(ranked, topSimilarity, topSimilarity >= _options.MinSimilarity || keywordConfident, IndexEmpty: false);
     }
 }

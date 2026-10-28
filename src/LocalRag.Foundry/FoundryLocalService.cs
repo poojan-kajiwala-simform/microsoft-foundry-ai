@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using LocalRag.Core;
 using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.Hosting;
@@ -40,13 +42,12 @@ public sealed class FoundryLocalService : IHostedService
     private readonly ILoggerFactory _loggerFactory;
     private readonly Slot _chat, _embedding;
     private CancellationTokenSource? _cts;
+    private Task _loadTask = Task.CompletedTask;
 
-    // OpenAIChatClient/OpenAIEmbeddingClient are marked obsolete in favour of ChatSession/EmbeddingsSession but are
-    // still supported by the SDK; they are the in-process OpenAI-compatible surface this project wraps.
-#pragma warning disable CS0618
-    internal OpenAIChatClient? ChatClient { get; private set; }
-    internal OpenAIEmbeddingClient? EmbeddingClient { get; private set; }
-#pragma warning restore CS0618
+    // Session API (SDK 2.x). The embeddings session is stateless and safe to share. Chat sessions accumulate turn
+    // history, so the chat adapter creates one per request from this loaded model instead of sharing a session.
+    internal IModel? ChatModel { get; private set; }
+    internal EmbeddingsSession? Embeddings { get; private set; }
 
     public FoundryLocalService(IOptions<RagOptions> options, ILogger<FoundryLocalService> logger, ILoggerFactory loggerFactory)
     {
@@ -66,7 +67,7 @@ public sealed class FoundryLocalService : IHostedService
     internal void EnsureReady(bool chat)
     {
         var slot = chat ? _chat : _embedding;
-        var ready = chat ? ChatClient is not null : EmbeddingClient is not null;
+        var ready = chat ? ChatModel is not null : Embeddings is not null;
         if (slot.State != ModelLoadState.Ready || !ready) throw new ModelNotReadyException(slot.Alias, slot.State.ToString(), slot.Error);
     }
 
@@ -88,7 +89,7 @@ public sealed class FoundryLocalService : IHostedService
         _cts = new CancellationTokenSource();
         await FoundryLocalManager.CreateAsync(new Configuration { AppName = _options.AppName }, _loggerFactory.CreateLogger("FoundryLocal"), cancellationToken);
         _logger.LogInformation("Foundry Local runtime started.");
-        _ = Task.Run(() => LoadAllAsync(_cts.Token));
+        _loadTask = Task.Run(() => LoadAllAsync(_cts.Token)); // observed in StopAsync; LoadAllAsync handles its own failures
     }
 
     private async Task LoadAllAsync(CancellationToken ct)
@@ -135,15 +136,15 @@ public sealed class FoundryLocalService : IHostedService
                 slot.DownloadTime = sw.Elapsed;
             }
 
+            if (isChat) await CapSequenceLengthAsync(model, ct);
+
             slot.State = ModelLoadState.Loading;
             var load = Stopwatch.StartNew();
             await model.LoadAsync(ct);
             slot.LoadTime = load.Elapsed; // cold-start cost: reported by /health
 
-#pragma warning disable CS0618
-            if (isChat) ChatClient = await model.GetChatClientAsync(ct);
-            else EmbeddingClient = await model.GetEmbeddingClientAsync(ct);
-#pragma warning restore CS0618
+            if (isChat) ChatModel = model;
+            else Embeddings = new EmbeddingsSession(model);
 
             slot.State = ModelLoadState.Ready;
             _logger.LogInformation("'{Alias}' ready (variant {Variant}, load {Seconds:F1}s).", slot.Alias, slot.VariantId, slot.LoadTime.Value.TotalSeconds);
@@ -156,9 +157,46 @@ public sealed class FoundryLocalService : IHostedService
         }
     }
 
+    /// <summary>
+    /// The runtime sizes the KV cache from genai_config.json's search.max_length, which long-context models (phi-3.5-mini:
+    /// 131072) set to their full window — tens of GB, so loading fails. The request API cannot override it, so cap it in
+    /// the cached config before loading. Idempotent; only ever lowers the value.
+    /// </summary>
+    private async Task CapSequenceLengthAsync(IModel model, CancellationToken ct)
+    {
+        try
+        {
+            var path = Path.Combine(await model.GetPathAsync(ct), "genai_config.json");
+            if (!File.Exists(path)) return;
+
+            var root = JsonNode.Parse(await File.ReadAllTextAsync(path, ct))!;
+            var cap = _options.MaxSequenceLength;
+            // The runtime may size the cache from either field, so lower both.
+            var fields = new[] { (Obj: root["search"]?.AsObject(), Key: "max_length"), (Obj: root["model"]?.AsObject(), Key: "context_length") };
+            var current = 0;
+            foreach (var (obj, key) in fields)
+            {
+                if (obj?[key]?.GetValue<int>() is not int value || value <= cap) continue;
+                current = Math.Max(current, value);
+                obj[key] = cap;
+            }
+            if (current == 0) return;
+            await File.WriteAllTextAsync(path, root.ToJsonString(new JsonSerializerOptions { WriteIndented = true }), ct);
+            _logger.LogInformation("Capped '{Alias}' context {From} -> {To} to fit the KV cache in memory.", model.Alias, current, _options.MaxSequenceLength);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not cap max_length for '{Alias}'; loading with the model default.", model.Alias);
+        }
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         _cts?.Cancel();
+        try { await _loadTask.WaitAsync(cancellationToken); }
+        catch (OperationCanceledException) { /* shutdown requested while a model was loading */ }
+        _cts?.Dispose();
+        Embeddings?.Dispose();
         if (!FoundryLocalManager.IsInitialized) return;
 
         var manager = FoundryLocalManager.Instance;

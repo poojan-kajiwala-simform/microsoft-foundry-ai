@@ -16,6 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddLocalRagCore(builder.Configuration);
 builder.Services.AddFoundryLocal(); // <- the only provider-specific line; swap for Azure OpenAI/Ollama by registering IChatClient + IEmbeddingGenerator instead
 
+builder.Services.AddProblemDetails(); // unexpected failures (out of memory in a model, SQLite I/O) become application/problem+json
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(o => o.SwaggerDoc("v1", new() { Title = "Local RAG Assistant", Version = "v1" }));
 builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
@@ -23,7 +24,10 @@ builder.Services.Configure<FormOptions>(o => o.MultipartBodyLengthLimit = 100 * 
 
 var app = builder.Build();
 var json = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+const int MaxQueryLength = 2000;
 
+app.UseExceptionHandler();
+app.UseStatusCodePages();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -54,19 +58,34 @@ app.MapDelete("/documents", async (string source, IngestionPipeline ingestion, C
 
 // POST /ingest            -> sync the configured documents folder (add / update / skip unchanged / remove deleted)
 // POST /ingest + files    -> save uploads into that folder, then sync
-app.MapPost("/ingest", async (HttpRequest request, IngestionPipeline ingestion, CancellationToken ct) =>
+// Multipart is a CORS "simple" request, so any web page could POST here without a preflight. A custom header forces a
+// preflight that cross-site pages cannot pass (this app sends no CORS headers), and uploads never overwrite silently.
+app.MapPost("/ingest", async (HttpRequest request, bool? overwrite, IngestionPipeline ingestion, CancellationToken ct) =>
 {
+    if (!request.Headers.ContainsKey(ClientHeader.Name))
+        return Results.Problem($"Missing '{ClientHeader.Name}' header.", statusCode: 403);
+
     var folder = DocumentsFolder();
     Directory.CreateDirectory(folder);
 
     if (request.HasFormContentType)
     {
         var form = await request.ReadFormAsync(ct);
+
+        // Validate every file before writing any, so a rejected upload leaves nothing behind.
+        var uploads = new List<(IFormFile File, string Name)>();
         foreach (var file in form.Files)
         {
             var name = Path.GetFileName(file.FileName); // strips any path segments: no traversal out of the folder
             if (!TextExtractor.IsSupported(name))
                 return Results.BadRequest(new { error = $"Unsupported file type: {name}. Supported: .pdf .docx .txt .md" });
+            if (overwrite != true && File.Exists(Path.Combine(folder, name)))
+                return Results.Conflict(new { error = $"{name} already exists. Re-send with ?overwrite=true to replace it.", exists = name });
+            uploads.Add((file, name));
+        }
+
+        foreach (var (file, name) in uploads)
+        {
             await using var target = File.Create(Path.Combine(folder, name));
             await file.CopyToAsync(target, ct);
         }
@@ -82,25 +101,107 @@ app.MapPost("/ingest", async (HttpRequest request, IngestionPipeline ingestion, 
 .DisableAntiforgery()
 .WithSummary("Syncs the documents folder into the index (idempotent). Optionally upload files as multipart/form-data first.");
 
-// Returns { answer } once generation has finished (no streaming).
-app.MapPost("/ask", async (AskRequest req, RagAnswerService rag, CancellationToken ct) =>
+// Default: JSON {result}. With ?stream=true, SSE events: token* -> done {result} | error
+app.MapPost("/ask", async (AskRequest req, bool? stream, HttpContext http, RagAnswerService rag, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(req.Query)) return Results.BadRequest(new { error = "query is required." });
+    if (req.Query.Length > MaxQueryLength) return Results.BadRequest(new { error = $"query is limited to {MaxQueryLength} characters." });
+
+    if (stream != true)
+    {
+        try
+        {
+            string? answer = null;
+            await foreach (var e in rag.AskAsync(req.Query, null, ct))
+                if (e is DoneEvent d) answer = d.Answer;
+            return Results.Ok(new { result = answer });
+        }
+        catch (ModelNotReadyException ex) { return Results.Problem(ex.Message, statusCode: 503); }
+        catch (ReindexRequiredException ex) { return Results.Problem(ex.Message, statusCode: 409); }
+    }
+
+    await using var events = rag.AskAsync(req.Query, null, ct).GetAsyncEnumerator(ct);
+    var words = new WordBuffer();
+    var started = false;
+
+    async Task Write(string name, string data)
+    {
+        if (!started)
+        {
+            http.Response.ContentType = "text/event-stream";
+            http.Response.Headers.CacheControl = "no-cache";
+            started = true;
+        }
+        await http.Response.WriteAsync($"event: {name}\n", ct);
+        foreach (var line in data.Split('\n')) await http.Response.WriteAsync($"data: {line}\n", ct);
+        await http.Response.WriteAsync("\n", ct);
+        await http.Response.Body.FlushAsync(ct);
+    }
 
     try
     {
-        await foreach (var e in rag.AskAsync(req.Query, null, ct))
-            if (e is DoneEvent d) return Results.Ok(new { answer = d.Answer });
-        return Results.Problem("No answer was produced.", statusCode: 500);
+        while (await events.MoveNextAsync())
+        {
+            switch (events.Current)
+            {
+                case TokenEvent t:
+                    // Models stream sub-word fragments; send whole words so clients get readable text.
+                    if (words.Push(t.Text) is { } word) await Write("token", word);
+                    break;
+                case DoneEvent d:
+                    if (words.Flush() is { } rest) await Write("token", rest);
+                    await Write("done", JsonSerializer.Serialize(new { result = d.Answer }, json));
+                    break;
+            }
+        }
     }
-    catch (ModelNotReadyException ex) { return Results.Problem(ex.Message, statusCode: 503); }
-    catch (ReindexRequiredException ex) { return Results.Problem(ex.Message, statusCode: 409); }
+    catch (OperationCanceledException) { /* client went away or pressed Stop */ }
+    catch (Exception ex) when (!started)
+    {
+        return ex switch
+        {
+            ModelNotReadyException => Results.Problem(ex.Message, statusCode: 503),
+            ReindexRequiredException => Results.Problem(ex.Message, statusCode: 409),
+            _ => throw ex,
+        };
+    }
+    catch (Exception ex)
+    {
+        await Write("error", ex.Message);
+    }
+    return Results.Empty;
 })
-.WithSummary("Answers a question from the indexed documents and returns only the final answer.");
+.WithSummary("Returns a grounded, cited answer as JSON {result}; pass ?stream=true for Server-Sent Events.");
 
 app.Run();
 
 namespace LocalRagAssistant
 {
+    internal static class ClientHeader { public const string Name = "X-LocalRag-Client"; }
+
     public sealed record AskRequest(string Query);
+
+    /// <summary>Accumulates streamed fragments and releases them at word boundaries.</summary>
+    internal sealed class WordBuffer
+    {
+        private readonly StringBuilder _buffer = new();
+
+        public string? Push(string fragment)
+        {
+            _buffer.Append(fragment);
+            var text = _buffer.ToString();
+            var cut = text.LastIndexOfAny([' ', '\n']);
+            if (cut < 0) return null;
+            _buffer.Clear().Append(text, cut + 1, text.Length - cut - 1);
+            return text[..(cut + 1)];
+        }
+
+        public string? Flush()
+        {
+            if (_buffer.Length == 0) return null;
+            var rest = _buffer.ToString();
+            _buffer.Clear();
+            return rest;
+        }
+    }
 }

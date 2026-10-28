@@ -20,6 +20,9 @@ public sealed partial class RagAnswerService(
     [GeneratedRegex(@"\[(\d+)\]")]
     private static partial Regex CitationMarker();
 
+    [GeneratedRegex(@"<think>.*?(</think>|$)", RegexOptions.Singleline | RegexOptions.IgnoreCase)]
+    private static partial Regex ThinkBlock();
+
     public const string NoDocumentsMessage = "No documents have been indexed yet. Ingest some documents first.";
 
     public async IAsyncEnumerable<RagEvent> AskAsync(
@@ -68,11 +71,13 @@ public sealed partial class RagAnswerService(
         }
 
         var text = answer.ToString();
-        var cited = CitationMarker().Matches(text)
+        // Reasoning models may emit <think>…</think>; citations are validated against the visible answer only.
+        var visible = ThinkBlock().Replace(text, "");
+        var cited = CitationMarker().Matches(visible)
             .Select(m => int.Parse(m.Groups[1].Value))
             .Where(n => n >= 1 && n <= citations.Count)
             .Distinct().Order().ToList();
-        var declined = text.Contains("don't have enough information", StringComparison.OrdinalIgnoreCase);
+        var declined = visible.Contains("don't have enough information", StringComparison.OrdinalIgnoreCase);
 
         yield return new DoneEvent(text, citations, cited, declined ? AbstainReasons.ModelDeclined : null,
             new(retrievalTime, firstToken, total.Elapsed, fragments));

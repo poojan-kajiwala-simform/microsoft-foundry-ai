@@ -1,16 +1,13 @@
 using System.Runtime.CompilerServices;
-using Betalgo.Ranul.OpenAI.ObjectModels.RequestModels;
+using Microsoft.AI.Foundry.Local;
 using Microsoft.Extensions.AI;
 using MeaiChatMessage = Microsoft.Extensions.AI.ChatMessage;
 
 namespace LocalRag.Foundry;
 
-/// <summary>Adapts Foundry Local's in-process chat client to <see cref="IChatClient"/>, so the RAG code never sees Foundry types.</summary>
+/// <summary>Adapts a Foundry Local <see cref="ChatSession"/> to <see cref="IChatClient"/>, so the RAG code never sees Foundry types.</summary>
 internal sealed class FoundryChatClient(FoundryLocalService foundry) : IChatClient
 {
-    // The SDK client holds mutable per-client settings, so serialise calls that change them.
-    private readonly SemaphoreSlim _settingsGate = new(1, 1);
-
     public async Task<ChatResponse> GetResponseAsync(
         IEnumerable<MeaiChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default) =>
         await GetStreamingResponseAsync(messages, options, cancellationToken).ToChatResponseAsync(cancellationToken);
@@ -19,34 +16,34 @@ internal sealed class FoundryChatClient(FoundryLocalService foundry) : IChatClie
         IEnumerable<MeaiChatMessage> messages, ChatOptions? options = null, [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
         foundry.EnsureReady(chat: true);
-#pragma warning disable CS0618
-        var client = foundry.ChatClient!;
-#pragma warning restore CS0618
 
-        var request = messages.Select(ToFoundry).ToList();
-
-        await _settingsGate.WaitAsync(cancellationToken);
-        try
+        // A session keeps its own turn history and sampling options, so each request gets a fresh one: concurrent
+        // requests can never see each other's settings or messages.
+        using var session = new ChatSession(foundry.ChatModel!);
+        session.SetStreaming(true);
+        session.SetOptions(new RequestOptions
         {
-            if (options?.MaxOutputTokens is { } max) client.Settings.MaxTokens = max;
-            if (options?.Temperature is { } temperature) client.Settings.Temperature = temperature;
-        }
-        finally { _settingsGate.Release(); }
+            Search = new SearchOptions { MaxOutputTokens = options?.MaxOutputTokens, Temperature = options?.Temperature },        });
 
-        await foreach (var chunk in client.CompleteChatStreamingAsync(request, cancellationToken))
+        using var request = new Request();
+        foreach (var message in messages) request.AddItem(ToFoundry(message));
+
+        await using var stream = session.ProcessStreamingRequestAsync(request, cancellationToken);
+        await foreach (var item in stream.WithCancellation(cancellationToken))
         {
-            var text = chunk.Choices?.FirstOrDefault()?.Delta?.Content;
-            if (!string.IsNullOrEmpty(text))
-                yield return new ChatResponseUpdate(ChatRole.Assistant, text);
+            // Reasoning models (deepseek-r1, phi-4-reasoning) tag their chain of thought; only answer text is streamed on.
+            if (item is TextItem { Type: TextItemType.Default } text && !string.IsNullOrEmpty(text.Text))
+                yield return new ChatResponseUpdate(ChatRole.Assistant, text.Text);
         }
+        using var final = await stream.FinalResponse;
     }
 
-    private static Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ChatMessage ToFoundry(MeaiChatMessage m)
+    private static MessageItem ToFoundry(MeaiChatMessage m)
     {
         var text = m.Text ?? string.Empty;
-        if (m.Role == ChatRole.System) return Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ChatMessage.FromSystem(text);
-        if (m.Role == ChatRole.Assistant) return Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ChatMessage.FromAssistant(text);
-        return Betalgo.Ranul.OpenAI.ObjectModels.RequestModels.ChatMessage.FromUser(text);
+        if (m.Role == ChatRole.System) return MessageItem.System(text);
+        if (m.Role == ChatRole.Assistant) return MessageItem.Assistant(text);
+        return MessageItem.User(text);
     }
 
     public object? GetService(Type serviceType, object? serviceKey = null) =>
@@ -54,5 +51,5 @@ internal sealed class FoundryChatClient(FoundryLocalService foundry) : IChatClie
         : serviceKey is null && serviceType == typeof(ChatClientMetadata) ? new ChatClientMetadata("foundry-local", defaultModelId: foundry.Chat.Alias)
         : null;
 
-    public void Dispose() => _settingsGate.Dispose();
+    public void Dispose() { }
 }

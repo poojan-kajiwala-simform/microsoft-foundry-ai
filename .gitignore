@@ -9,3 +9,6 @@ data/
 **/data/
 # Superseded v1 code, safe to delete
 old/
+
+# IDE
+.vs/

@@ -6,7 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Microsoft.AI.Foundry.Local" Version="2.0.1" />
+    <PackageReference Include="Microsoft.AI.Foundry.Local" Version="2.2.1" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.4" />
     <ProjectReference Include="..\LocalRag.Core\LocalRag.Core.csproj" />
   </ItemGroup>

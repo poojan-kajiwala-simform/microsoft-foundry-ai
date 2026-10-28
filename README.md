@@ -71,7 +71,7 @@ flowchart LR
 
 ## Run it
 
-Requirements: Windows x64 (the project is configured for `win-x64`), .NET 8 SDK. **No separate Foundry install or CLI
+Requirements: Windows x64 (the project is configured for `win-x64`), .NET 10 SDK (10.0.201 or later, see `global.json`). **No separate Foundry install or CLI
 is needed**: the SDK bundles the runtime (verified: runs on a machine without the `foundry` CLI on PATH).
 
 ```powershell
@@ -105,7 +105,7 @@ and failed documents rather than crashing. Close memory-hungry apps, use a small
 | `GET /health` | runtime, per-model lifecycle + timings, indexed chunk count |
 | `POST /ingest` | sync `Rag:DocumentsFolder`; add `multipart/form-data` files to upload them there first |
 | `GET /documents`, `DELETE /documents?source=` | list / remove indexed documents |
-| `POST /ask` `{ "query": "..." }` | `{ "answer": "..." }` (final answer only, no streaming) |
+| `POST /ask` `{ "query": "...", "source": "optional/file-or-folder-prefix" }` | SSE: `sources` -> `token`* -> `done` (or `error`) |
 
 `/ask` returns 503 if a model is not ready and 409 if the index needs rebuilding. The browser UI streams tokens, can be
 cancelled with **Stop** (cancellation propagates to generation), shows each source as `file > section` with its

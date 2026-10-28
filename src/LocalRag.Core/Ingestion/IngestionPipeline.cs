@@ -155,11 +155,17 @@ public sealed class IngestionPipeline(
 
     public async Task<bool> RemoveAsync(string source, CancellationToken ct = default)
     {
-        var known = (await repository.GetDocumentsAsync(ct)).Any(d => d.Source == source);
-        if (!known) return false;
-        await repository.DeleteDocumentAsync(source, ct);
-        await index.RemoveDocumentAsync(source, ct);
-        return true;
+        // Serialised with ingestion runs so a delete cannot race a sync's view of the existing documents.
+        await _runGate.WaitAsync(ct);
+        try
+        {
+            var known = (await repository.GetDocumentsAsync(ct)).Any(d => d.Source == source);
+            if (!known) return false;
+            await repository.DeleteDocumentAsync(source, ct);
+            await index.RemoveDocumentAsync(source, ct);
+            return true;
+        }
+        finally { _runGate.Release(); }
     }
 
     /// <summary>Vectors from different embedding models are not comparable: if the model changed, drop everything and rebuild.</summary>
