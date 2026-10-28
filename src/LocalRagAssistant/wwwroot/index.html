@@ -96,11 +96,15 @@ $('form').onsubmit = async e => {
         const block = buf.slice(0, i); buf = buf.slice(i + 2);
         const ev = /^event: (.*)$/m.exec(block)?.[1];
         const data = block.split('\n').filter(l => l.startsWith('data: ')).map(l => l.slice(6)).join('\n');
-        if (ev === 'token') $('answer').textContent += data;
+        if (ev === 'sources') { retrieved = JSON.parse(data); render(retrieved, cited); }
+        else if (ev === 'token') $('answer').textContent += data;
         else if (ev === 'error') $('answer').textContent += '\n[error] ' + data;
         else if (ev === 'done') {
           const d = JSON.parse(data);
           if (!$('answer').textContent) $('answer').textContent = d.result;
+          cited = d.citedIndexes ?? [];
+          render(d.citations?.length ? d.citations : retrieved, cited);
+          if (d.timings) $('timings').textContent = `retrieval ${d.timings.retrievalMs} ms · first token ${d.timings.firstTokenMs ?? '–'} ms · total ${d.timings.totalMs} ms`;
         }
       }
     }

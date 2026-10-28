@@ -77,7 +77,7 @@ public sealed partial class RagAnswerService(
             .Select(m => int.Parse(m.Groups[1].Value))
             .Where(n => n >= 1 && n <= citations.Count)
             .Distinct().Order().ToList();
-        var declined = visible.Contains("don't have enough information", StringComparison.OrdinalIgnoreCase);
+        var declined = visible.Replace('’', '\'').Contains("don't have enough information", StringComparison.OrdinalIgnoreCase);
 
         yield return new DoneEvent(text, citations, cited, declined ? AbstainReasons.ModelDeclined : null,
             new(retrievalTime, firstToken, total.Elapsed, fragments));

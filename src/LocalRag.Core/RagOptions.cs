@@ -48,8 +48,8 @@ public sealed class RagOptions
 
     // ---- Generation ----
     /// <summary>Token budget for retrieved context (estimated at ~4 chars/token). Keep well under the model's context window.</summary>
-    public int MaxContextTokens { get; set; } = 1500;
-    public int MaxAnswerTokens { get; set; } = 400;
+    public int MaxContextTokens { get; set; } = 1100;
+    public int MaxAnswerTokens { get; set; } = 300;
     /// <summary>Total sequence length (prompt + answer) the chat model allocates its KV cache for. Must exceed context + answer budgets; lower it if model loading runs out of memory.</summary>
     public int MaxSequenceLength { get; set; } = 2048;
     public float Temperature { get; set; } = 0.1f;

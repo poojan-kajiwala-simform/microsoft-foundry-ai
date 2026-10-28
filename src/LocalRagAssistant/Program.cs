@@ -60,7 +60,7 @@ app.MapDelete("/documents", async (string source, IngestionPipeline ingestion, C
 // POST /ingest + files    -> save uploads into that folder, then sync
 // Multipart is a CORS "simple" request, so any web page could POST here without a preflight. A custom header forces a
 // preflight that cross-site pages cannot pass (this app sends no CORS headers), and uploads never overwrite silently.
-app.MapPost("/ingest", async (HttpRequest request, bool? overwrite, IngestionPipeline ingestion, CancellationToken ct) =>
+app.MapPost("/ingest", async (HttpRequest request, bool? overwrite, IngestionPipeline ingestion, IOptions<RagOptions> ragOptions, CancellationToken ct) =>
 {
     if (!request.Headers.ContainsKey(ClientHeader.Name))
         return Results.Problem($"Missing '{ClientHeader.Name}' header.", statusCode: 403);
@@ -78,9 +78,12 @@ app.MapPost("/ingest", async (HttpRequest request, bool? overwrite, IngestionPip
         {
             var name = Path.GetFileName(file.FileName); // strips any path segments: no traversal out of the folder
             if (!TextExtractor.IsSupported(name))
-                return Results.BadRequest(new { error = $"Unsupported file type: {name}. Supported: .pdf .docx .txt .md" });
+                return Results.Problem($"Unsupported file type: {name}. Supported: .pdf .docx .txt .md", statusCode: 400);
+            if (file.Length > ragOptions.Value.MaxFileBytes)
+                return Results.Problem($"{name} is larger than the {ragOptions.Value.MaxFileBytes / (1024 * 1024)} MB limit.", statusCode: 400);
             if (overwrite != true && File.Exists(Path.Combine(folder, name)))
-                return Results.Conflict(new { error = $"{name} already exists. Re-send with ?overwrite=true to replace it.", exists = name });
+                return Results.Problem($"{name} already exists. Re-send with ?overwrite=true to replace it.", statusCode: 409,
+                    extensions: new Dictionary<string, object?> { ["exists"] = name });
             uploads.Add((file, name));
         }
 
@@ -101,20 +104,36 @@ app.MapPost("/ingest", async (HttpRequest request, bool? overwrite, IngestionPip
 .DisableAntiforgery()
 .WithSummary("Syncs the documents folder into the index (idempotent). Optionally upload files as multipart/form-data first.");
 
-// Default: JSON {result}. With ?stream=true, SSE events: token* -> done {result} | error
+// Default: JSON with the same fields as the SSE "done" event. With ?stream=true, SSE events: sources -> token* -> done | error.
+// Sources are announced once generation starts, so an abstention (no model call) is a single "done" event.
+static object DonePayload(DoneEvent d) => new
+{
+    result = d.Answer,
+    citations = d.Retrieved,
+    citedIndexes = d.CitedIndexes,
+    abstainReason = d.AbstainReason,
+    timings = new
+    {
+        retrievalMs = (long)d.Timings.Retrieval.TotalMilliseconds,
+        firstTokenMs = d.Timings.FirstToken is { } f ? (long?)f.TotalMilliseconds : null,
+        totalMs = (long)d.Timings.Total.TotalMilliseconds,
+        streamedFragments = d.Timings.StreamedFragments,
+    },
+};
+
 app.MapPost("/ask", async (AskRequest req, bool? stream, HttpContext http, RagAnswerService rag, CancellationToken ct) =>
 {
-    if (string.IsNullOrWhiteSpace(req.Query)) return Results.BadRequest(new { error = "query is required." });
-    if (req.Query.Length > MaxQueryLength) return Results.BadRequest(new { error = $"query is limited to {MaxQueryLength} characters." });
+    if (string.IsNullOrWhiteSpace(req.Query)) return Results.Problem("query is required.", statusCode: 400);
+    if (req.Query.Length > MaxQueryLength) return Results.Problem($"query is limited to {MaxQueryLength} characters.", statusCode: 400);
 
     if (stream != true)
     {
         try
         {
-            string? answer = null;
+            DoneEvent? done = null;
             await foreach (var e in rag.AskAsync(req.Query, null, ct))
-                if (e is DoneEvent d) answer = d.Answer;
-            return Results.Ok(new { result = answer });
+                if (e is DoneEvent d) done = d;
+            return Results.Ok(done is null ? new { result = (string?)null } : DonePayload(done));
         }
         catch (ModelNotReadyException ex) { return Results.Problem(ex.Message, statusCode: 503); }
         catch (ReindexRequiredException ex) { return Results.Problem(ex.Message, statusCode: 409); }
@@ -144,34 +163,31 @@ app.MapPost("/ask", async (AskRequest req, bool? stream, HttpContext http, RagAn
         {
             switch (events.Current)
             {
+                case RetrievedEvent r:
+                    await Write("sources", JsonSerializer.Serialize(r.Citations, json));
+                    break;
                 case TokenEvent t:
                     // Models stream sub-word fragments; send whole words so clients get readable text.
                     if (words.Push(t.Text) is { } word) await Write("token", word);
                     break;
                 case DoneEvent d:
                     if (words.Flush() is { } rest) await Write("token", rest);
-                    await Write("done", JsonSerializer.Serialize(new { result = d.Answer }, json));
+                    await Write("done", JsonSerializer.Serialize(DonePayload(d), json));
                     break;
             }
         }
     }
     catch (OperationCanceledException) { /* client went away or pressed Stop */ }
-    catch (Exception ex) when (!started)
-    {
-        return ex switch
-        {
-            ModelNotReadyException => Results.Problem(ex.Message, statusCode: 503),
-            ReindexRequiredException => Results.Problem(ex.Message, statusCode: 409),
-            _ => throw ex,
-        };
-    }
+    // Filter only the exceptions we map, so anything else reaches UseExceptionHandler with its original stack trace.
+    catch (ModelNotReadyException ex) when (!started) { return Results.Problem(ex.Message, statusCode: 503); }
+    catch (ReindexRequiredException ex) when (!started) { return Results.Problem(ex.Message, statusCode: 409); }
     catch (Exception ex)
     {
         await Write("error", ex.Message);
     }
     return Results.Empty;
 })
-.WithSummary("Returns a grounded, cited answer as JSON {result}; pass ?stream=true for Server-Sent Events.");
+.WithSummary("Returns a grounded, cited answer as JSON; pass ?stream=true for Server-Sent Events (sources, token*, done).");
 
 app.Run();
 
